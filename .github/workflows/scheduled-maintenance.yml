@@ -1,0 +1,61 @@
+name: Scheduled AI Maintenance
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  stale-pr-review:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Review stale PRs
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python .github/scripts/stale_pr_manager.py
+
+    - name: Generate repository insights
+      run: |
+        python .github/scripts/repo_insights.py
+
+    - name: Update documentation
+      run: |
+        python .github/scripts/auto_docs.py
+
+  performance-monitoring:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Monitor AI agent performance
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python .github/scripts/monitor_performance.py
+
+    - name: Generate weekly report
+      if: github.event.schedule == '0 2 * * 1'  # Monday at 2 AM
+      run: |
+        python .github/scripts/weekly_report.py

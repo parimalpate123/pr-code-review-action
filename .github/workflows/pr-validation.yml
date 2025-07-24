@@ -1,0 +1,143 @@
+name: PR Validation Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  statuses: write
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    outputs:
+      changes-detected: ${{ steps.changes.outputs.changes-detected }}
+      code-changes: ${{ steps.changes.outputs.code-changes }}
+      config-changes: ${{ steps.changes.outputs.config-changes }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Detect changes
+      id: changes
+      run: |
+        # Get list of changed files
+        CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+        echo "Changed files: $CHANGED_FILES"
+        
+        # Check for code changes
+        if echo "$CHANGED_FILES" | grep -E '\.(py|js|ts|java|go|rs|cpp|c|rb|php)$'; then
+          echo "code-changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "code-changes=false" >> $GITHUB_OUTPUT
+        fi
+        
+        # Check for config changes
+        if echo "$CHANGED_FILES" | grep -E '\.(yml|yaml|json|toml|ini|conf)$'; then
+          echo "config-changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "config-changes=false" >> $GITHUB_OUTPUT
+        fi
+        
+        if [ -n "$CHANGED_FILES" ]; then
+          echo "changes-detected=true" >> $GITHUB_OUTPUT
+        else
+          echo "changes-detected=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Validate PR title
+      run: |
+        python .github/scripts/validate_pr_title.py "${{ github.event.pull_request.title }}"
+
+    - name: Check branch naming
+      run: |
+        BRANCH_NAME="${{ github.head_ref }}"
+        if [[ ! "$BRANCH_NAME" =~ ^(feature|fix|hotfix|chore|docs)/.+ ]]; then
+          echo "::error::Branch name '$BRANCH_NAME' doesn't follow naming convention (feature/*, fix/*, hotfix/*, chore/*, docs/*)"
+          exit 1
+        fi
+
+  code-analysis:
+    runs-on: ubuntu-latest
+    needs: validate-pr
+    if: needs.validate-pr.outputs.code-changes == 'true'
+    
+    strategy:
+      matrix:
+        analysis-type: [quality, security, performance]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Run Code Analysis
+      env:
+        ANALYSIS_TYPE: ${{ matrix.analysis-type }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python .github/scripts/code_analyzer.py
+
+  automated-testing:
+    runs-on: ubuntu-latest
+    needs: validate-pr
+    if: needs.validate-pr.outputs.code-changes == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup test environment
+      run: |
+        # Setup based on project type
+        if [ -f "requirements.txt" ]; then
+          pip install -r requirements.txt
+        elif [ -f "package.json" ]; then
+          npm install
+        elif [ -f "go.mod" ]; then
+          go mod download
+        fi
+
+    - name: Run tests with AI insights
+      run: |
+        python .github/scripts/intelligent_testing.py
+
+  deployment-readiness:
+    runs-on: ubuntu-latest
+    needs: [validate-pr, code-analysis, automated-testing]
+    if: always() && needs.validate-pr.outputs.changes-detected == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+    - name: Assess deployment readiness
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python .github/scripts/deployment_readiness.py
+  
