@@ -1,0 +1,29 @@
+{
+  "name": "pr-agent",
+  "version": "0.0.1",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "npx tsc -p tsconfig.json && npx cpx \"src/prompt/*.md\" dist/src/prompt",
+    "lint": "echo 'no linter yet'",
+    "test": "npx jest",
+    "smoke:anthropic": "node scripts/anthropic-smoke.js 'Hello from Anthropic'",
+    "smoke:openai": "node scripts/openai-smoke.js 'Hello from OpenAI'"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.1",
+    "@actions/github": "^5.1.1",
+    "@octokit/rest": "^20.0.0",
+    "node-fetch": "^3.3.0",
+    "openai": "^4.25.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "cpx": "^1.5.0",
+    "jest": "^30.0.5",
+    "mocha": "^11.7.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

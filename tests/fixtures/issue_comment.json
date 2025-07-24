@@ -1,0 +1,14 @@
+{
+  "comment": { "body": "@agent please review" },
+  "issue": { "number": 1 },
+  "repository": {
+    "full_name": "octocat/Hello-World",
+    "name": "Hello-World",
+    "owner": { "login": "octocat" }
+  },
+  "sender": { "login": "octocat" },
+  "pull_request": {
+    "number": 1,
+    "url": "https://api.github.com/repos/octocat/Hello-World/pulls/1"
+  }
+} 
