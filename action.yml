@@ -36,16 +36,14 @@ runs:
       with:
         fetch-depth: 0
 
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: "1.2.12"
+    # 👇 REMOVE Bun setup and install steps
 
-    - name: Install deps
+    # Optionally install production deps (needed if any code needs node_modules, not just pure JS in dist/)
+    - name: Install deps (npm)
       shell: bash
       run: |
         cd ${{ github.action_path }}
-        bun install --production
+        npm ci --omit=dev || npm install --omit=dev
 
     - name: Prepare PR context
       id: prepare
@@ -54,7 +52,7 @@ runs:
         echo "GITHUB_TOKEN exists: ${{ env.GITHUB_TOKEN != '' }}"
         echo "Event: ${{ github.event_name }}"
         echo "PR Number: ${{ github.event.pull_request.number }}"
-        bun run ${{ github.action_path }}/dist/entrypoints/prepare.js
+        node ${{ github.action_path }}/dist/entrypoints/prepare.js
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
@@ -65,7 +63,7 @@ runs:
       if: steps.prepare.outputs.run_agent == 'true'
       run: |
         echo "Running agent with model: ${{ inputs.model }}"
-        bun run ${{ github.action_path }}/dist/entrypoints/run-agent.js \
+        node ${{ github.action_path }}/dist/entrypoints/run-agent.js \
           --context_file ${{ steps.prepare.outputs.context_file }} \
           --model ${{ inputs.model }} \
           --max_tokens ${{ inputs.max_tokens }}
@@ -79,11 +77,11 @@ runs:
       if: steps.prepare.outputs.run_agent == 'true'
       run: |
         echo "Updating PR comment with generated body..."
-        bun run ${{ github.action_path }}/dist/entrypoints/update-comment.js \
+        node ${{ github.action_path }}/dist/entrypoints/update-comment.js \
           --context_file ${{ steps.prepare.outputs.context_file }} \
           --body_file ${{ steps.agent.outputs.body_file }}
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}        
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
