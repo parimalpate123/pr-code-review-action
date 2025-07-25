@@ -1,7 +1,6 @@
 {
   "name": "pr-agent",
   "version": "0.0.1",
-  "type": "module",
   "license": "MIT",
   "scripts": {
     "build": "npx tsc -p tsconfig.json && npx cpx \"src/prompt/*.md\" dist/src/prompt",
