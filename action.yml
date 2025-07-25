@@ -52,7 +52,7 @@ runs:
         echo "GITHUB_TOKEN exists: ${{ env.GITHUB_TOKEN != '' }}"
         echo "Event: ${{ github.event_name }}"
         echo "PR Number: ${{ github.event.pull_request.number }}"
-        node ${{ github.action_path }}/dist/entrypoints/prepare.js
+        node ${{ github.action_path }}/dist/src/entrypoints/prepare.js
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
@@ -63,7 +63,7 @@ runs:
       if: steps.prepare.outputs.run_agent == 'true'
       run: |
         echo "Running agent with model: ${{ inputs.model }}"
-        node ${{ github.action_path }}/dist/entrypoints/run-agent.js \
+        node ${{ github.action_path }}/dist/src/entrypoints/run-agent.js \
           --context_file ${{ steps.prepare.outputs.context_file }} \
           --model ${{ inputs.model }} \
           --max_tokens ${{ inputs.max_tokens }}
@@ -77,7 +77,7 @@ runs:
       if: steps.prepare.outputs.run_agent == 'true'
       run: |
         echo "Updating PR comment with generated body..."
-        node ${{ github.action_path }}/dist/entrypoints/update-comment.js \
+        node ${{ github.action_path }}/dist/src/entrypoints/update-comment.js \
           --context_file ${{ steps.prepare.outputs.context_file }} \
           --body_file ${{ steps.agent.outputs.body_file }}
       shell: bash
