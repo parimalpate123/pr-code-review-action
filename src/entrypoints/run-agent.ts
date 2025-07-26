@@ -25,12 +25,13 @@ interface Context {
 // This type should match the one expected by chatCompletion and anthropicChat
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-function detectProvider(model: string): "anthropic" | "openai" | "bedrock" {
-  if (model.startsWith("claude") || model.startsWith("anthropic")) return "anthropic";
-  if (model.startsWith("gpt") || model.startsWith("o3")) return "openai";
-  if (model.startsWith("amazon.") || model.startsWith("bedrock.") || model.startsWith("anthropic.")) return "bedrock";
+function detectProvider(model: string): "bedrock" | "anthropic" | "openai" {
+  if (model.startsWith("anthropic.")) return "bedrock"; // Bedrock Anthropic models
+  if (model.startsWith("claude")) return "anthropic";   // Direct Anthropic API
+  if (model.startsWith("gpt") || model.startsWith("o3")) return "openai"; // OpenAI
   throw new Error("Unknown model prefix");
 }
+
 
 function getArgValue(flag: string): string | undefined {
   const idx = process.argv.indexOf(flag);
