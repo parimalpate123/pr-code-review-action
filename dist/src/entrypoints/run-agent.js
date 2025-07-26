@@ -41,11 +41,14 @@ const anthropic_1 = require("../llm/anthropic");
 const builder_1 = require("../prompt/builder");
 const inline_1 = require("../github/inline");
 const rest_1 = require("@octokit/rest");
+const bedrock_1 = require("../llm/bedrock");
 function detectProvider(model) {
+    if (model.startsWith("anthropic."))
+        return "bedrock"; // Bedrock Anthropic models
     if (model.startsWith("claude"))
-        return "anthropic";
+        return "anthropic"; // Direct Anthropic API
     if (model.startsWith("gpt") || model.startsWith("o3"))
-        return "openai";
+        return "openai"; // OpenAI
     throw new Error("Unknown model prefix");
 }
 function getArgValue(flag) {
@@ -98,7 +101,7 @@ async function run() {
                     timeoutMs: timeoutMs,
                 });
             }
-            else {
+            else if (provider === "anthropic") {
                 const anthropicKey = process.env.ANTHROPIC_API_KEY;
                 if (!anthropicKey) {
                     throw new Error("❌ ANTHROPIC_API_KEY is not set");
@@ -109,6 +112,16 @@ async function run() {
                     model,
                     maxTokens: 1024,
                     timeoutMs: timeoutMs,
+                });
+            }
+            else if (provider === "bedrock") {
+                const bedrockModel = process.env.BEDROCK_MODEL || model;
+                const bedrockRegion = process.env.BEDROCK_REGION || "us-east-1";
+                answer = await (0, bedrock_1.bedrockChat)({
+                    model: bedrockModel,
+                    prompt,
+                    maxTokens,
+                    region: bedrockRegion
                 });
             }
         }
