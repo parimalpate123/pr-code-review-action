@@ -2,27 +2,24 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bedrockChat = bedrockChat;
 const client_bedrock_runtime_1 = require("@aws-sdk/client-bedrock-runtime");
-// Utility to check if the model is Anthropic via its ID (works for all Claude 3+ via Bedrock)
 function isAnthropicModel(modelId) {
     return modelId.startsWith("anthropic.");
 }
 async function bedrockChat(options) {
     const { model, prompt, maxTokens = 1024, region } = options;
     const client = new client_bedrock_runtime_1.BedrockRuntimeClient({ region });
-    // Build body depending on model
     let body;
     if (isAnthropicModel(model)) {
-        // Anthropic via Bedrock expects messages array and max_tokens_to_sample
+        // Claude 3 (and above) via Bedrock expects these exact fields
         body = {
-            // Claude 3 via Bedrock expects a 'messages' array, not 'prompt'
-            // Here we treat the full prompt as a single user message:
             messages: [{ role: "user", content: prompt }],
-            max_tokens_to_sample: maxTokens,
-            // Optionally, you can add temperature, stop_sequences, etc. as needed
+            max_tokens: maxTokens,
+            anthropic_version: "bedrock-2023-05-31"
+            // Optionally: temperature, stop_sequences, etc.
         };
     }
     else {
-        // Default/fallback for other models, e.g., Llama, Titan
+        // Fallback for other Bedrock models (not Anthropic)
         body = {
             prompt,
             max_tokens: maxTokens,
@@ -36,14 +33,14 @@ async function bedrockChat(options) {
     };
     const command = new client_bedrock_runtime_1.InvokeModelCommand(input);
     const response = await client.send(command);
-    // Parse result according to model output format (Claude, Titan, Llama differ)
     const text = await response.body.transformToString();
     let result = {};
     try {
         result = JSON.parse(text);
     }
     catch { }
-    // Claude (Anthropic) returns .content, others might return .completion or .outputs
+    // Anthropic/Claude 3+ on Bedrock: .content
+    // Titan, Llama, etc: .completion or .outputs[0].text
     return (result.content ||
         result.completion ||
         result.outputs?.[0]?.text ||
