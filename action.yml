@@ -15,6 +15,13 @@ inputs:
     description: "Model id to use (e.g. claude-3-sonnet-20240229, gpt-4o-pro)"
     required: false
     default: "claude-3-sonnet-20240229"
+  bedrock_model:
+    description: "Bedrock Model id to use (e.g. anthropic.claude-3-sonnet-20240229-v1:0)"
+    required: false
+  bedrock_region:
+    description: "AWS region for Bedrock"
+    required: false
+    default: "us-east-1"
   trigger_phrase:
     description: "Trigger phrase that activates the agent in comments"
     required: false
@@ -72,6 +79,11 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ inputs.bedrock_region }}
+        BEDROCK_MODEL: ${{ inputs.bedrock_model }}
+        BEDROCK_REGION: ${{ inputs.bedrock_region }}
 
     - name: Update PR comment
       if: steps.prepare.outputs.run_agent == 'true'
@@ -85,3 +97,8 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ inputs.bedrock_region }}
+        BEDROCK_MODEL: ${{ inputs.bedrock_model }}
+        BEDROCK_REGION: ${{ inputs.bedrock_region }}

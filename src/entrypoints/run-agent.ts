@@ -6,6 +6,7 @@ import { anthropicChat } from "../llm/anthropic";
 import { buildPrompt } from "../prompt/builder";
 import { postInlineReview } from "../github/inline";
 import { Octokit } from "@octokit/rest";
+import { bedrockChat } from "../llm/bedrock";
 
 interface RepoInfo {
   owner: string;
@@ -24,9 +25,10 @@ interface Context {
 // This type should match the one expected by chatCompletion and anthropicChat
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-function detectProvider(model: string): "anthropic" | "openai" {
-  if (model.startsWith("claude")) return "anthropic";
+function detectProvider(model: string): "anthropic" | "openai" | "bedrock" {
+  if (model.startsWith("claude") || model.startsWith("anthropic")) return "anthropic";
   if (model.startsWith("gpt") || model.startsWith("o3")) return "openai";
+  if (model.startsWith("amazon.") || model.startsWith("bedrock.") || model.startsWith("anthropic.")) return "bedrock";
   throw new Error("Unknown model prefix");
 }
 
@@ -88,7 +90,7 @@ async function run() {
           model,
           timeoutMs: timeoutMs,
         });
-      } else {
+      } else if (provider === "anthropic") {
         const anthropicKey = process.env.ANTHROPIC_API_KEY;
         if (!anthropicKey) {
           throw new Error("❌ ANTHROPIC_API_KEY is not set");
@@ -100,7 +102,16 @@ async function run() {
           maxTokens: 1024,
           timeoutMs: timeoutMs,
         });
-      }
+        } else if (provider === "bedrock") {
+          const bedrockModel = process.env.BEDROCK_MODEL || model;
+          const bedrockRegion = process.env.BEDROCK_REGION || "us-east-1";
+          answer = await bedrockChat({
+            model: bedrockModel,
+            prompt,
+            maxTokens,
+            region: bedrockRegion
+          });
+        }
     } catch (err: any) {
       answer = `⚠️ LLM call failed: ${err.message}`;
     }
