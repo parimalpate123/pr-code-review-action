@@ -38,17 +38,18 @@ const core = __importStar(require("@actions/core"));
 const promises_1 = require("fs/promises");
 const openai_1 = require("../llm/openai");
 const anthropic_1 = require("../llm/anthropic");
+const bedrock_1 = require("../llm/bedrock");
 const builder_1 = require("../prompt/builder");
 const inline_1 = require("../github/inline");
 const rest_1 = require("@octokit/rest");
-const bedrock_1 = require("../llm/bedrock");
 function detectProvider(model) {
-    if (model.startsWith("anthropic."))
-        return "bedrock"; // Bedrock Anthropic models
+    // Bedrock models typically have a . in their model name, e.g., "anthropic.claude-3-5-sonnet-20240620-v1:0"
+    if (model.startsWith("anthropic.claude") || model.startsWith("cohere.") || model.startsWith("meta."))
+        return "bedrock";
     if (model.startsWith("claude"))
-        return "anthropic"; // Direct Anthropic API
+        return "anthropic";
     if (model.startsWith("gpt") || model.startsWith("o3"))
-        return "openai"; // OpenAI
+        return "openai";
     throw new Error("Unknown model prefix");
 }
 function getArgValue(flag) {
@@ -86,47 +87,42 @@ async function run() {
             repo: context.repo,
             prNumber: context.prNumber,
         });
-        console.log("🔍 Prompt being sent to Claude:\n", prompt);
+        console.log("🔍 Prompt being sent:\n", prompt);
         const messages = [{ role: "user", content: prompt }];
         let answer = "";
         try {
             if (provider === "openai") {
-                const openaiKey = process.env.OPENAI_API_KEY;
-                if (!openaiKey)
-                    throw new Error("❌ OPENAI_API_KEY is not set");
-                console.log("🔍 Prompt being sent to Claude/OpenAI:\n", prompt);
                 answer = await (0, openai_1.chatCompletion)(messages, {
-                    apiKey: openaiKey,
+                    apiKey: process.env.OPENAI_API_KEY ?? "",
                     model,
                     timeoutMs: timeoutMs,
                 });
             }
             else if (provider === "anthropic") {
-                const anthropicKey = process.env.ANTHROPIC_API_KEY;
-                if (!anthropicKey) {
+                if (!process.env.ANTHROPIC_API_KEY)
                     throw new Error("❌ ANTHROPIC_API_KEY is not set");
-                }
-                console.log("🔍 Prompt being sent to Claude/Anthropic:\n", prompt);
                 answer = await (0, anthropic_1.anthropicChat)(messages, {
-                    apiKey: anthropicKey,
+                    apiKey: process.env.ANTHROPIC_API_KEY,
                     model,
                     maxTokens: 1024,
                     timeoutMs: timeoutMs,
                 });
             }
             else if (provider === "bedrock") {
-                const bedrockModel = process.env.BEDROCK_MODEL || model;
-                const bedrockRegion = process.env.BEDROCK_REGION || "us-east-1";
                 answer = await (0, bedrock_1.bedrockChat)({
-                    model: bedrockModel,
+                    model,
                     prompt,
-                    maxTokens,
-                    region: bedrockRegion
+                    maxTokens: maxTokens,
+                    region: process.env.AWS_REGION || "us-east-1",
                 });
             }
         }
         catch (err) {
             answer = `⚠️ LLM call failed: ${err.message}`;
+        }
+        // --- Ensure answer is a string before using string methods
+        if (typeof answer !== "string") {
+            answer = JSON.stringify(answer, null, 2);
         }
         let inline = [];
         const jsonMatch = answer.match(/```json([\s\S]*?)```/);

@@ -7,52 +7,36 @@ export interface BedrockOptions {
   region: string;
 }
 
-function isAnthropicModel(modelId: string): boolean {
-  return modelId.startsWith("anthropic.");
-}
-
 export async function bedrockChat(options: BedrockOptions): Promise<string> {
   const { model, prompt, maxTokens = 1024, region } = options;
   const client = new BedrockRuntimeClient({ region });
 
-  let body: any;
-
-  if (isAnthropicModel(model)) {
-    // Claude 3 (and above) via Bedrock expects these exact fields
-    body = {
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: maxTokens,
-      anthropic_version: "bedrock-2023-05-31"
-      // Optionally: temperature, stop_sequences, etc.
-    };
-  } else {
-    // Fallback for other Bedrock models (not Anthropic)
-    body = {
-      prompt,
-      max_tokens: maxTokens,
-    };
-  }
+  // For Claude 3 models, the input must have "anthropic_version" and "messages"
+  // Adjust if you want to support non-Claude models!
+  const body = JSON.stringify({
+    anthropic_version: "bedrock-2023-05-31",
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content: prompt }],
+  });
 
   const input = {
     modelId: model,
     contentType: "application/json",
     accept: "application/json",
-    body: JSON.stringify(body),
+    body,
   };
 
   const command = new InvokeModelCommand(input);
   const response = await client.send(command);
 
+  // Parse result according to model output format (Claude, Titan, Llama differ)
   const text = await response.body.transformToString();
   let result: any = {};
   try { result = JSON.parse(text); } catch {}
-
-  // Anthropic/Claude 3+ on Bedrock: .content
-  // Titan, Llama, etc: .completion or .outputs[0].text
-  return (
-    result.content ||
-    result.completion ||
-    result.outputs?.[0]?.text ||
-    text
-  );
+  // Always return a string, no matter what.
+  if (typeof result.content === "string") return result.content;
+  if (Array.isArray(result.content)) return result.content.map((c: any) => c.text || c).join('\n');
+  if (typeof result.completion === "string") return result.completion;
+  if (result.outputs?.[0]?.text) return result.outputs[0].text;
+  return typeof text === "string" ? text : JSON.stringify(text);
 }

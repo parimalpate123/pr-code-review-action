@@ -3,10 +3,10 @@ import * as core from "@actions/core";
 import { readFile, writeFile } from "fs/promises";
 import { chatCompletion } from "../llm/openai";
 import { anthropicChat } from "../llm/anthropic";
+import { bedrockChat } from "../llm/bedrock";
 import { buildPrompt } from "../prompt/builder";
 import { postInlineReview } from "../github/inline";
 import { Octokit } from "@octokit/rest";
-import { bedrockChat } from "../llm/bedrock";
 
 interface RepoInfo {
   owner: string;
@@ -22,16 +22,15 @@ interface Context {
   thread: { author: string; body: string }[];
 }
 
-// This type should match the one expected by chatCompletion and anthropicChat
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-function detectProvider(model: string): "bedrock" | "anthropic" | "openai" {
-  if (model.startsWith("anthropic.")) return "bedrock"; // Bedrock Anthropic models
-  if (model.startsWith("claude")) return "anthropic";   // Direct Anthropic API
-  if (model.startsWith("gpt") || model.startsWith("o3")) return "openai"; // OpenAI
+function detectProvider(model: string): "anthropic" | "openai" | "bedrock" {
+  // Bedrock models typically have a . in their model name, e.g., "anthropic.claude-3-5-sonnet-20240620-v1:0"
+  if (model.startsWith("anthropic.claude") || model.startsWith("cohere.") || model.startsWith("meta.")) return "bedrock";
+  if (model.startsWith("claude")) return "anthropic";
+  if (model.startsWith("gpt") || model.startsWith("o3")) return "openai";
   throw new Error("Unknown model prefix");
 }
-
 
 function getArgValue(flag: string): string | undefined {
   const idx = process.argv.indexOf(flag);
@@ -75,46 +74,40 @@ async function run() {
       repo: context.repo,
       prNumber: context.prNumber,
     });
-    console.log("🔍 Prompt being sent to Claude:\n", prompt);
+    console.log("🔍 Prompt being sent:\n", prompt);
 
     const messages: ChatMessage[] = [{ role: "user", content: prompt }];
-
-    let answer = "";
-
+    let answer: string = "";
     try {
       if (provider === "openai") {
-        const openaiKey = process.env.OPENAI_API_KEY;
-        if (!openaiKey) throw new Error("❌ OPENAI_API_KEY is not set");
-        console.log("🔍 Prompt being sent to Claude/OpenAI:\n", prompt);
         answer = await chatCompletion(messages, {
-          apiKey: openaiKey,
+          apiKey: process.env.OPENAI_API_KEY ?? "",
           model,
           timeoutMs: timeoutMs,
         });
       } else if (provider === "anthropic") {
-        const anthropicKey = process.env.ANTHROPIC_API_KEY;
-        if (!anthropicKey) {
-          throw new Error("❌ ANTHROPIC_API_KEY is not set");
-        }
-        console.log("🔍 Prompt being sent to Claude/Anthropic:\n", prompt);
+        if (!process.env.ANTHROPIC_API_KEY) throw new Error("❌ ANTHROPIC_API_KEY is not set");
         answer = await anthropicChat(messages, {
-          apiKey: anthropicKey,
+          apiKey: process.env.ANTHROPIC_API_KEY,
           model,
           maxTokens: 1024,
           timeoutMs: timeoutMs,
         });
-        } else if (provider === "bedrock") {
-          const bedrockModel = process.env.BEDROCK_MODEL || model;
-          const bedrockRegion = process.env.BEDROCK_REGION || "us-east-1";
-          answer = await bedrockChat({
-            model: bedrockModel,
-            prompt,
-            maxTokens,
-            region: bedrockRegion
-          });
-        }
+      } else if (provider === "bedrock") {
+        answer = await bedrockChat({
+          model,
+          prompt,
+          maxTokens: maxTokens,
+          region: process.env.AWS_REGION || "us-east-1",
+        });
+      }
     } catch (err: any) {
       answer = `⚠️ LLM call failed: ${err.message}`;
+    }
+
+    // --- Ensure answer is a string before using string methods
+    if (typeof answer !== "string") {
+      answer = JSON.stringify(answer, null, 2);
     }
 
     let inline: any[] = [];
